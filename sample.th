@@ -1,0 +1,3 @@
+(define pi 3.1416)
+(define e 2.7183)
+(+ pi e)
