@@ -1,0 +1,8 @@
+edition = "2021"
+group_imports = "StdExternalCrate"
+hard_tabs = true
+imports_granularity = "Crate"
+match_arm_leading_pipes = "Preserve"
+use_field_init_shorthand = true
+use_small_heuristics = "Max"
+
