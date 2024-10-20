@@ -5,7 +5,10 @@ use crate::{
 	Datum, Env, EvaluationError,
 };
 
+pub const APPLY: GString = GString::from_bytes(b"apply");
 pub const DEFINE: GString = GString::from_bytes(b"define");
+pub const CONS: GString = GString::from_bytes(b"cons");
+
 const PLUS: GString = GString::from_bytes(b"+");
 const MINUS: GString = GString::from_bytes(b"-");
 const MULTIPLY: GString = GString::from_bytes(b"*");
@@ -25,11 +28,11 @@ fn plus(args: &Expression, env: &Env<'_>) -> Result<Datum, EvaluationError> {
 	match args {
 		Expression::Atom(Atom::Nil) => Ok(Datum::Atom(Atom::Number(0.0))),
 		Expression::Atom(_) => todo!(),
-		Expression::Expression { left, right } => {
-			let left = eval(left, &mut env)?;
+		Expression::Expression { head, tail } => {
+			let left = eval(&mut env, head)?;
 			match left.as_number() {
 				Some(left) => {
-					let right = plus(right, &env)?;
+					let right = plus(tail, &env)?;
 					let Some(right) = right.as_number() else { unreachable!() };
 					Ok(Datum::Atom(Atom::Number(left + right)))
 				}
@@ -44,11 +47,11 @@ fn minus(args: &Expression, env: &Env<'_>) -> Result<Datum, EvaluationError> {
 	match args {
 		Expression::Atom(Atom::Nil) => Ok(Datum::Atom(Atom::Number(0.0))),
 		Expression::Atom(_) => todo!(),
-		Expression::Expression { left, right } => {
-			let left = eval(left, &mut env)?;
+		Expression::Expression { head, tail } => {
+			let left = eval(&mut env, head)?;
 			match left.as_number() {
 				Some(left) => {
-					let right = plus(right, &env)?;
+					let right = plus(tail, &env)?;
 					let Some(right) = right.as_number() else { unreachable!() };
 					Ok(Datum::Atom(Atom::Number(left - right)))
 				}
@@ -63,11 +66,11 @@ fn multiply(args: &Expression, env: &Env<'_>) -> Result<Datum, EvaluationError> 
 	match args {
 		Expression::Atom(Atom::Nil) => Ok(Datum::Atom(Atom::Number(1.0))),
 		Expression::Atom(_) => todo!(),
-		Expression::Expression { left, right } => {
-			let left = eval(left, &mut env)?;
+		Expression::Expression { head, tail } => {
+			let left = eval(&mut env, head)?;
 			match left.as_number() {
 				Some(left) => {
-					let right = multiply(right, &env)?;
+					let right = multiply(tail, &env)?;
 					let Some(right) = right.as_number() else { unreachable!() };
 					Ok(Datum::Atom(Atom::Number(left * right)))
 				}
@@ -82,11 +85,11 @@ fn divide(args: &Expression, env: &Env<'_>) -> Result<Datum, EvaluationError> {
 	match args {
 		Expression::Atom(Atom::Nil) => Ok(Datum::Atom(Atom::Number(1.0))),
 		Expression::Atom(_) => todo!(),
-		Expression::Expression { left, right } => {
-			let left = eval(left, &mut env)?;
+		Expression::Expression { head, tail } => {
+			let left = eval(&mut env, head)?;
 			match left.as_number() {
 				Some(left) => {
-					let right = multiply(right, &env)?;
+					let right = multiply(tail, &env)?;
 					let Some(right) = right.as_number() else { unreachable!() };
 					Ok(Datum::Atom(Atom::Number(left / right)))
 				}

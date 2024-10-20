@@ -89,5 +89,5 @@ fn parse_expr<'a>(input: &mut Peekable<impl Iterator<Item = &'a str>>) -> Expres
 		_ => parse_expr(input),
 	};
 
-	Expression::Expression { left: Box::new(left), right: Box::new(right) }
+	Expression::Expression { head: Box::new(left), tail: Box::new(right) }
 }

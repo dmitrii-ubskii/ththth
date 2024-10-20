@@ -1,4 +1,5 @@
 (define pi 3.1416)
 (define e 2.7183)
 (define (mean a b) (/ (+ a b) 2))
-(mean pi e)
+(cons pi (cons e ()))
+(apply mean (cons pi (cons e ())))
