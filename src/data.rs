@@ -8,6 +8,26 @@ pub enum Expression {
 	Expression { left: Box<Expression>, right: Box<Expression> },
 }
 
+impl Expression {
+	pub fn as_symbol(&self) -> Option<&GString> {
+		match self {
+			Self::Atom(Atom::Symbol(symbol)) => Some(symbol),
+			_ => None,
+		}
+	}
+
+	pub fn as_list(&self) -> Option<impl Iterator<Item = &Expression>> {
+		match self {
+			Self::Expression { left, right } => {
+				let tail: Vec<_> = right.as_list()?.collect();
+				Some(Some(left as _).into_iter().chain(tail))
+			}
+			Self::Atom(Atom::Nil) => Some(None.into_iter().chain(vec![])),
+			Self::Atom(_) => None,
+		}
+	}
+}
+
 #[derive(Clone, Debug)]
 pub enum Atom {
 	Nil,
@@ -31,7 +51,10 @@ impl fmt::Display for Atom {
 #[derive(Clone, Debug)]
 pub enum Datum {
 	Void,
+	// Err,
 	Atom(Atom),
+	// List { head: Box<Datum>, tail: Box<Datum> },
+	Expression { formals: Vec<GString>, expression: Expression },
 	Builtin(fn(&Expression, &Env<'_>) -> Result<Datum, EvaluationError>),
 }
 
@@ -48,8 +71,37 @@ impl fmt::Display for Datum {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Self::Void => Ok(()),
+			// Self::Err => write!(f, "ERR"),
 			Self::Atom(atom) => write!(f, "{atom}"),
+			Self::Expression { .. } => write!(f, "#expression"),
 			Self::Builtin(_) => write!(f, "#builtin"),
+			// Self::List { head, tail } => {
+			// 	write!(f, "(")?;
+			// 	write!(f, "{head}")?;
+			// 	let mut tail: &Self = tail;
+			// 	loop {
+			// 		match tail {
+			// 			Self::Void => {
+			// 				write!(f, ". <void>")?;
+			// 				break;
+			// 			}
+			// 			Self::Atom(Atom::Nil) => break,
+			// 			| Self::Err
+			// 			| Self::Atom(_)
+			// 			| Self::Expression { .. }
+			// 			| Self::Builtin(_) => {
+			// 				write!(f, ". {tail}")?;
+			// 				break;
+			// 			}
+			// 			Self::List { head, tail: next } => {
+			// 				write!(f, " {head}")?;
+			// 				tail = next;
+			// 			}
+			// 		}
+			// 	}
+			// 	write!(f, ")")?;
+			// 	Ok(())
+			// }
 		}
 	}
 }

@@ -50,12 +50,31 @@ fn eval(expr: &Expression, env: &mut Env<'_>) -> Result<Datum, EvaluationError> 
 				match left {
 					Datum::Void => todo!(),
 					Datum::Atom(_) => todo!(),
+					Datum::Expression { formals, expression } => {
+						let mut local_env = Env::local(env);
+						populate_formals(formals, right, &mut local_env)?;
+						eval(&expression, &mut local_env)
+					}
 					Datum::Builtin(builtin) => builtin(right, env),
 				}
 			}
 			Expression::Expression { .. } => todo!(),
 		},
 	}
+}
+
+fn populate_formals(
+	formals: Vec<GString>,
+	right: &Expression,
+	local_env: &mut Env<'_>,
+) -> Result<(), EvaluationError> {
+	let Some(mut args) = right.as_list() else { return Err(EvaluationError::BadSyntax) };
+	for formal in formals {
+		let Some(arg) = args.next() else { return Err(EvaluationError::NotEnoughArgs { formal }) };
+		let arg = eval(arg, local_env);
+		local_env.insert(formal, arg?);
+	}
+	Ok(())
 }
 
 fn eval_atom(atom: &Atom, env: &Env<'_>) -> Result<Datum, EvaluationError> {
@@ -69,7 +88,7 @@ fn eval_atom(atom: &Atom, env: &Env<'_>) -> Result<Datum, EvaluationError> {
 }
 
 fn define(args: &Expression, env: &mut Env<'_>) -> Result<(), EvaluationError> {
-	let Expression::Expression { left: symbol, right: value } = args else {
+	let Expression::Expression { left: defined, right: value } = args else {
 		return Err(EvaluationError::DefineWrongNumberOfArgs { args: args.clone() });
 	};
 	let Expression::Expression { left: value, right: nil } = &**value else {
@@ -79,15 +98,36 @@ fn define(args: &Expression, env: &mut Env<'_>) -> Result<(), EvaluationError> {
 		Expression::Atom(Atom::Nil) => (),
 		_ => return Err(EvaluationError::DefineWrongNumberOfArgs { args: args.clone() }),
 	}
-	match &**symbol {
+	match &**defined {
 		Expression::Atom(Atom::Symbol(symbol)) => {
 			let value = eval(value, env)?;
 			env.insert(symbol.clone(), value);
 			Ok(())
 		}
-		Expression::Atom(_) => todo!(),
-		Expression::Expression { .. } => todo!(),
+		Expression::Atom(_) => Err(EvaluationError::DefineLeft { nonsymbol: (**defined).clone() }),
+		Expression::Expression { left, right: formals } => {
+			let Some(symbol) = left.as_symbol() else {
+				return Err(EvaluationError::DefineLeft { nonsymbol: (**left).clone() });
+			};
+			let formals = get_def_formals(formals)?;
+			env.insert(
+				symbol.clone(),
+				Datum::Expression { formals, expression: (**value).clone() },
+			);
+			Ok(())
+		}
 	}
+}
+
+fn get_def_formals(formals: &Expression) -> Result<Vec<GString>, EvaluationError> {
+	let Some(formal_list) = formals.as_list() else { return Err(EvaluationError::BadSyntax) };
+	let formals = formal_list
+		.map(|expr| match expr.as_symbol() {
+			Some(formal) => Ok::<_, EvaluationError>(formal.clone()),
+			None => todo!(),
+		})
+		.collect::<Result<_, _>>()?;
+	Ok(formals)
 }
 
 #[derive(Default)]
@@ -120,16 +160,26 @@ impl Env<'_> {
 
 #[derive(Debug)]
 enum EvaluationError {
+	BadSyntax,
 	UnboundSymbol { symbol: GString },
+	NotEnoughArgs { formal: GString },
 	DefineWrongNumberOfArgs { args: Expression },
+	DefineLeft { nonsymbol: Expression },
 }
 
 impl fmt::Display for EvaluationError {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
+			Self::BadSyntax => write!(f, "bad syntax"),
 			Self::UnboundSymbol { symbol } => write!(f, "unbound symbol {symbol}"),
+			Self::NotEnoughArgs { formal } => {
+				write!(f, "no value to substitute for argument `{formal}`")
+			}
 			Self::DefineWrongNumberOfArgs { args } => {
 				write!(f, "wrong number of arguments to `define`: {args:?}")
+			}
+			Self::DefineLeft { nonsymbol } => {
+				write!(f, "expected symbol in define, found: {nonsymbol:?}")
 			}
 		}
 	}
