@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::string::GString;
+use crate::{string::GString, Env, EvaluationError};
 
 #[derive(Clone, Debug)]
 pub enum Expression {
@@ -32,6 +32,16 @@ impl fmt::Display for Atom {
 pub enum Datum {
 	Void,
 	Atom(Atom),
+	Builtin(fn(&Expression, &Env<'_>) -> Result<Datum, EvaluationError>),
+}
+
+impl Datum {
+	pub fn as_number(&self) -> Option<f64> {
+		match *self {
+			Datum::Atom(Atom::Number(num)) => Some(num),
+			_ => None,
+		}
+	}
 }
 
 impl fmt::Display for Datum {
@@ -39,6 +49,7 @@ impl fmt::Display for Datum {
 		match self {
 			Self::Void => Ok(()),
 			Self::Atom(atom) => write!(f, "{atom}"),
+			Self::Builtin(_) => write!(f, "#builtin"),
 		}
 	}
 }

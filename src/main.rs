@@ -45,7 +45,14 @@ fn eval(expr: &Expression, env: &mut Env<'_>) -> Result<Datum, EvaluationError> 
 				define(right, env)?;
 				Ok(Datum::Void)
 			}
-			Expression::Atom(_) => todo!(),
+			Expression::Atom(atom) => {
+				let left = eval_atom(atom, env)?;
+				match left {
+					Datum::Void => todo!(),
+					Datum::Atom(_) => todo!(),
+					Datum::Builtin(builtin) => builtin(right, env),
+				}
+			}
 			Expression::Expression { .. } => todo!(),
 		},
 	}
@@ -92,6 +99,12 @@ struct Env<'a> {
 impl Env<'static> {
 	fn new() -> Self {
 		Self::default()
+	}
+}
+
+impl<'a> Env<'a> {
+	fn local(outer: &'a Env<'_>) -> Self {
+		Self { local: HashMap::default(), outer: Some(outer) }
 	}
 }
 
