@@ -166,12 +166,12 @@ impl fmt::Display for Datum {
 				loop {
 					match tail {
 						Self::Void => {
-							write!(f, ". <void>")?;
+							write!(f, " . <void>")?;
 							break;
 						}
 						Self::Atom(Atom::Nil) => break,
 						| Self::Atom(_) | Self::Expression { .. } | Self::Builtin(_) => {
-							write!(f, ". {tail}")?;
+							write!(f, " . {tail}")?;
 							break;
 						}
 						Self::List { head, tail: next } => {
