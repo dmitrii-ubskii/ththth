@@ -1,3 +1,6 @@
+#![deny(elided_lifetimes_in_paths)]
+#![deny(clippy::semicolon_if_nothing_returned)]
+
 use std::{
 	collections::HashMap,
 	env,
@@ -6,12 +9,14 @@ use std::{
 	io::{stdin, Read},
 };
 
-use self::string::GString;
+use builtin::DEFINE;
+use data::{Atom, Datum, Expression};
+use string::GString;
 
+mod builtin;
+mod data;
 mod parse;
 mod string;
-
-type Env = HashMap<GString, Value>;
 
 fn main() -> Result<(), Box<dyn Error>> {
 	let input = match env::args().nth(1) {
@@ -23,144 +28,95 @@ fn main() -> Result<(), Box<dyn Error>> {
 		}
 	};
 
-	let mut env = init_env();
+	let mut global_env = builtin::init_builtins();
 
 	let program = parse::parse(input.trim())?;
 	for expr in &program {
-		println!("{}", eval(expr, &mut env)?);
+		println!("{}", eval(expr, &mut global_env)?);
 	}
 	Ok(())
 }
 
-const DEFINE: GString = GString::from_bytes(b"define");
-const PLUS: GString = GString::from_bytes(b"+");
-const MINUS: GString = GString::from_bytes(b"-");
-
-fn init_env() -> Env {
-	let mut env = Env::new();
-	env.insert(PLUS, Value::Builtin(plus));
-	env.insert(MINUS, Value::Builtin(minus));
-	env
-}
-
-fn plus(args: Vec<Value>) -> Value {
-	args.into_iter().fold(Value::Number(0.0), |acc, item| {
-		let Value::Number(acc) = acc else { return Value::Err };
-		let Value::Number(num) = item else { return Value::Err };
-		Value::Number(acc + num)
-	})
-}
-
-fn minus(args: Vec<Value>) -> Value {
-	let mut args = args.into_iter();
-	let Some(first) = args.next() else { return Value::Err };
-	args.fold(first, |acc, item| {
-		let Value::Number(acc) = acc else { return Value::Err };
-		let Value::Number(num) = item else { return Value::Err };
-		Value::Number(acc - num)
-	})
-}
-
-#[derive(Clone, Debug)]
-enum Expression {
-	Number(f64),
-	Symbol(GString),
-	Application(Vec<Expression>),
-}
-
-#[derive(Clone, Debug)]
-enum Value {
-	Void,
-	Err,
-	Number(f64),
-	Symbol(GString),
-	List(Vec<Value>),
-	Builtin(fn(Vec<Value>) -> Value),
-}
-
-impl fmt::Display for Value {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match self {
-			Value::Void => Ok(()),
-			Value::Err => write!(f, "ERR"),
-			Value::Number(num) => write!(f, "{num}"),
-			Value::Symbol(sym) => write!(f, "{sym}"),
-			Value::Builtin(_) => write!(f, "#builtin"),
-			Value::List(list) => {
-				write!(f, "(")?;
-				if let [first, rest @ ..] = &list[..] {
-					write!(f, "{first}")?;
-					for item in rest {
-						write!(f, ", {item}")?;
-					}
-				}
-				write!(f, ")")?;
-				Ok(())
+fn eval(expr: &Expression, env: &mut Env<'_>) -> Result<Datum, EvaluationError> {
+	match expr {
+		Expression::Atom(atom) => eval_atom(atom, env),
+		Expression::Expression { left, right } => match &**left {
+			Expression::Atom(Atom::Symbol(DEFINE)) => {
+				define(right, env)?;
+				Ok(Datum::Void)
 			}
-		}
+			Expression::Atom(_) => todo!(),
+			Expression::Expression { .. } => todo!(),
+		},
 	}
 }
 
-fn eval(expr: &Expression, env: &mut Env) -> Result<Value, EvaluationError> {
-	match expr {
-		&Expression::Number(num) => Ok(Value::Number(num)),
-		Expression::Symbol(symbol) => match env.get(symbol) {
-			Some(value) => Ok(value.clone()),
+fn eval_atom(atom: &Atom, env: &Env<'_>) -> Result<Datum, EvaluationError> {
+	match atom {
+		Atom::Symbol(symbol) => match env.get(symbol) {
+			Some(datum) => Ok(datum.clone()),
 			None => Err(EvaluationError::UnboundSymbol { symbol: symbol.clone() }),
 		},
-		Expression::Application(list) => {
-			let [symbol, args @ ..] = &list[..] else {
-				return Err(EvaluationError::Application { value: Value::Void });
-			};
-			if let Expression::Symbol(DEFINE) = symbol {
-				define(args, env)
-			} else {
-				match eval(symbol, env)? {
-					value @ (Value::Void | Value::Err | Value::Number(_) | Value::List(_)) => {
-						Err(EvaluationError::Application { value })
-					}
-					Value::Symbol(_) => todo!(),
-					Value::Builtin(builtin) => {
-						let args =
-							args.iter().map(|arg| eval(arg, env)).collect::<Result<Vec<_>, _>>()?;
-						Ok(builtin(args))
-					}
-				}
-			}
-		}
+		atom => Ok(Datum::Atom(atom.clone())),
 	}
 }
 
-fn define(args: &[Expression], env: &mut Env) -> Result<Value, EvaluationError> {
-	let [symbol, value] = args else {
-		return Err(EvaluationError::DefineWrongNumberOfArgs { args: args.to_owned() });
+fn define(args: &Expression, env: &mut Env<'_>) -> Result<(), EvaluationError> {
+	let Expression::Expression { left: symbol, right: value } = args else {
+		return Err(EvaluationError::DefineWrongNumberOfArgs { args: args.clone() });
 	};
-	let Expression::Symbol(symbol) = symbol else {
-		return Err(EvaluationError::DefineLeft { nonsymbol: symbol.clone() });
+	let Expression::Expression { left: value, right: nil } = &**value else {
+		return Err(EvaluationError::DefineWrongNumberOfArgs { args: args.clone() });
 	};
-	let value = eval(value, env)?;
-	env.insert(symbol.clone(), value);
-	Ok(Value::Void)
+	match &**nil {
+		Expression::Atom(Atom::Nil) => (),
+		_ => return Err(EvaluationError::DefineWrongNumberOfArgs { args: args.clone() }),
+	}
+	match &**symbol {
+		Expression::Atom(Atom::Symbol(symbol)) => {
+			let value = eval(value, env)?;
+			env.insert(symbol.clone(), value);
+			Ok(())
+		}
+		Expression::Atom(_) => todo!(),
+		Expression::Expression { .. } => todo!(),
+	}
+}
+
+#[derive(Default)]
+struct Env<'a> {
+	local: HashMap<GString, Datum>,
+	outer: Option<&'a Env<'a>>,
+}
+
+impl Env<'static> {
+	fn new() -> Self {
+		Self::default()
+	}
+}
+
+impl Env<'_> {
+	fn insert(&mut self, key: GString, value: Datum) {
+		self.local.insert(key, value);
+	}
+
+	fn get(&self, symbol: &GString) -> Option<&Datum> {
+		self.local.get(symbol).or_else(|| self.outer.and_then(|outer| outer.get(symbol)))
+	}
 }
 
 #[derive(Debug)]
 enum EvaluationError {
 	UnboundSymbol { symbol: GString },
-	Application { value: Value },
-	DefineWrongNumberOfArgs { args: Vec<Expression> },
-	DefineLeft { nonsymbol: Expression },
+	DefineWrongNumberOfArgs { args: Expression },
 }
 
 impl fmt::Display for EvaluationError {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Self::UnboundSymbol { symbol } => write!(f, "unbound symbol {symbol}"),
-			Self::Application { value } => write!(f, "expected procedure, found {value:?}"),
 			Self::DefineWrongNumberOfArgs { args } => {
 				write!(f, "wrong number of arguments to `define`: {args:?}")
-			}
-			Self::DefineLeft { nonsymbol } => {
-				write!(f, "expected symbol in define, found: {nonsymbol:?}")
 			}
 		}
 	}

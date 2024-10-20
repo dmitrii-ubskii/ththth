@@ -1,12 +1,19 @@
-use std::error::Error;
+use std::{
+	error::Error,
+	iter::{self, Peekable},
+};
 
-use crate::Expression;
+use crate::{Atom, Expression};
 
 pub fn parse(mut input: &str) -> Result<Vec<Expression>, Box<dyn Error>> {
 	if input.is_empty() {
 		return Err("Unexpected EOF".into());
 	}
-	Ok(parse_list(&mut input))
+	let mut input = iter::from_fn(|| read_token(&mut input)).peekable();
+	Ok(iter::from_fn(
+		|| if input.peek().is_none() { None } else { Some(parse_statement(&mut input)) },
+	)
+	.collect())
 }
 
 fn read_token<'a>(input: &mut &'a str) -> Option<&'a str> {
@@ -46,22 +53,41 @@ fn read_token<'a>(input: &mut &'a str) -> Option<&'a str> {
 	Some(token)
 }
 
-fn parse_atom(atom: &str) -> Expression {
-	if let Ok(num) = atom.parse() {
-		Expression::Number(num)
-	} else {
-		Expression::Symbol(atom.into())
+fn parse_statement<'a>(input: &mut Peekable<impl Iterator<Item = &'a str>>) -> Expression {
+	match input.next().unwrap() {
+		"(" => parse_expr(input),
+		atom => Expression::Atom(parse_atom(atom)),
 	}
 }
 
-fn parse_list(input: &mut &str) -> Vec<Expression> {
-	let mut list = Vec::new();
-	while let Some(token) = read_token(input) {
-		match token {
-			")" => break,
-			"(" => list.push(Expression::Application(parse_list(input))),
-			atom => list.push(parse_atom(atom)),
+fn parse_atom(atom: &str) -> Atom {
+	match atom {
+		"#t" => Atom::Boolean(true),
+		"#f" => Atom::Boolean(false),
+		atom => {
+			if let Ok(num) = atom.parse() {
+				Atom::Number(num)
+			} else {
+				Atom::Symbol(atom.into())
+			}
 		}
 	}
-	list
+}
+
+fn parse_expr<'a>(input: &mut Peekable<impl Iterator<Item = &'a str>>) -> Expression {
+	let left = match input.next().unwrap() {
+		")" => return Expression::Atom(Atom::Nil),
+		"(" => parse_expr(input),
+		atom => Expression::Atom(parse_atom(atom)),
+	};
+
+	let right = match *input.peek().unwrap() {
+		")" => {
+			input.next();
+			Expression::Atom(Atom::Nil)
+		}
+		_ => parse_expr(input),
+	};
+
+	Expression::Expression { left: Box::new(left), right: Box::new(right) }
 }
