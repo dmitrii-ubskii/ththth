@@ -9,19 +9,13 @@
 (define (average a b)
   (/ (+ a b) 2))
 (define tolerance 0.00001)
-(define (close-enough? a b) (< (abs (- a b)) tolerance))
+(define (close-enough? a b)
+  (< (abs (- a b)) tolerance))
 
 (define (sqrt x)
-  ((iterative-improve
-     (lambda (y) (close-enough? y (/ x y)))
-     (lambda (y) (average y (/ x y))))
-   1.0))
+  ((iterative-improve (lambda (y) (close-enough? y (/ x y))) (lambda (y) (average y (/ x y)))) 1.0))
 (sqrt 81)
 
 (define (fixed-point f first-guess)
-  ((iterative-improve
-     (lambda (y) (close-enough? y (f y)))
-     f)
-   first-guess))
+  ((iterative-improve (lambda (y) (close-enough? y (f y))) f) first-guess))
 (fixed-point (lambda (x) (+ 1 (/ 1 x))) 1.0)
-
