@@ -3,7 +3,7 @@
 
 use std::{
 	collections::HashMap,
-	env, fs,
+	env, fmt, fs,
 	io::{stdin, Read},
 };
 
@@ -77,16 +77,17 @@ fn define(env: &mut Env<'_>, args: &Expression) -> Datum {
 			let Some(symbol) = symbol.as_symbol() else { return Datum::err() };
 			env.insert(
 				symbol.clone(),
-				Datum::Closure { formals: formals.clone(), body: body.clone() },
+				Datum::Closure { formals: formals.clone(), body: body.clone(), env: env.flatten() },
 			);
 			Datum::Void
 		}
 	}
 }
 
-fn lambda(_env: &mut Env<'_>, args: &Expression) -> Datum {
+fn lambda(env: &mut Env<'_>, args: &Expression) -> Datum {
 	let Expression::Expression { head: formals, tail: body } = args else { return Datum::err() };
-	Datum::Closure { formals: formals.clone(), body: body.clone() }
+	let env = env.flatten();
+	Datum::Closure { formals: formals.clone(), body: body.clone(), env }
 }
 
 fn if_then_else(env: &mut Env<'_>, args: &Expression) -> Datum {
@@ -151,7 +152,10 @@ fn unquote(quoted: &Expression) -> Datum {
 fn apply(env: &mut Env<'_>, head: Datum, args: Datum) -> Datum {
 	match &head {
 		Datum::Builtin(builtin) => builtin(env, args),
-		Datum::Closure { formals, body } => closure(env, formals, body, args),
+		Datum::Closure { formals, body, env: local } => {
+			let env = Env { local: local.clone(), outer: Some(env) };
+			closure(&env, formals, body, args)
+		}
 		_ => Datum::err(),
 	}
 }
@@ -226,6 +230,19 @@ impl Env<'static> {
 	}
 }
 
+impl Env<'_> {
+	fn flatten(&self) -> HashMap<GString, Datum> {
+		if let Some(outer) = self.outer {
+			let mut flat = outer.flatten();
+			flat.extend(self.local.iter().map(|(k, v)| (k.clone(), v.clone())));
+			flat
+		} else {
+			// dirty hack: don't clone global env
+			Default::default()
+		}
+	}
+}
+
 impl<'a> Env<'a> {
 	fn local(outer: &'a Env<'_>) -> Self {
 		Self { local: HashMap::default(), outer: Some(outer) }
@@ -239,5 +256,42 @@ impl Env<'_> {
 
 	fn get(&self, symbol: &GString) -> Option<&Datum> {
 		self.local.get(symbol).or_else(|| self.outer.and_then(|outer| outer.get(symbol)))
+	}
+}
+
+impl fmt::Debug for Env<'_> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		#[derive(Copy, Clone)]
+		struct FlatEnv<'a>(&'a Env<'a>);
+		impl<'a> FlatEnv<'a> {
+			fn iter(self) -> impl Iterator<Item = (&'a GString, &'a Datum)> {
+				let inner = self.0;
+				inner.local.iter().chain(
+					inner
+						.outer
+						.map(|e| {
+							Box::new(FlatEnv(e).iter())
+								as Box<dyn Iterator<Item = (&GString, &Datum)>>
+						})
+						.into_iter()
+						.flatten(),
+				)
+			}
+		}
+
+		impl fmt::Debug for FlatEnv<'_> {
+			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+				let mut map = f.debug_map();
+				for (key, value) in self.iter() {
+					map.entry(key, value);
+				}
+				map.finish()
+			}
+		}
+
+		f.debug_struct("Env")
+			.field("local", &self.local)
+			.field("outer", &self.outer.map(FlatEnv))
+			.finish()
 	}
 }

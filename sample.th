@@ -1,15 +1,27 @@
-(define (mean a b)
-  (/ (+ a b) 2))
+(define (iterative-improve good-enough? improve)
+  (lambda (first-guess)
+    (define (try guess)
+      (if (good-enough? guess)
+          guess
+          (try (improve guess))))
+    (try first-guess)))
 
-(define (good-enough? guess prev-guess)
-  (< (abs (- (/ guess prev-guess) 1)) 1e-9))
+(define (average a b)
+  (/ (+ a b) 2))
+(define tolerance 0.00001)
+(define (close-enough? a b) (< (abs (- a b)) tolerance))
 
 (define (sqrt x)
-  (define (iter guess prev-guess)
-    (if (good-enough? guess prev-guess)
-        guess
-        (iter (mean guess (/ x guess)) guess)))
-  (iter (/ x 2.0) x))
+  ((iterative-improve
+     (lambda (y) (close-enough? y (/ x y)))
+     (lambda (y) (average y (/ x y))))
+   1.0))
+(sqrt 81)
 
-(sqrt 2)
-(sqrt 9)
+(define (fixed-point f first-guess)
+  ((iterative-improve
+     (lambda (y) (close-enough? y (f y)))
+     f)
+   first-guess))
+(fixed-point (lambda (x) (+ 1 (/ 1 x))) 1.0)
+

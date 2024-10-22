@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{collections::HashMap, fmt};
 
 use crate::{builtin::ERR, string::GString, Env};
 
@@ -60,7 +60,7 @@ pub enum Datum {
 	Symbol(GString),
 	Quoted(Box<Expression>),
 	List { head: Box<Datum>, tail: Box<Datum> },
-	Closure { formals: Box<Expression>, body: Box<Expression> },
+	Closure { formals: Box<Expression>, body: Box<Expression>, env: HashMap<GString, Datum> },
 	Builtin(fn(&mut Env<'_>, Datum) -> Datum),
 }
 
@@ -86,7 +86,7 @@ impl fmt::Display for Datum {
 			Self::Number(num) => write!(f, "{num}"),
 			Self::Symbol(sym) => write!(f, "{sym}"),
 			Self::Quoted(quoted) => write!(f, "{quoted}"),
-			Self::Closure { formals, body } => write!(f, "(lambda {formals} {body})"),
+			Self::Closure { formals, body, .. } => write!(f, "(lambda {formals} {body})"),
 			Self::Builtin(_) => write!(f, "#builtin"),
 			Self::List { head, tail } => {
 				write!(f, "(")?;
