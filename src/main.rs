@@ -164,10 +164,15 @@ fn eval_list(env: &mut Env<'_>, list: &Expression) -> Datum {
 	if let Expression::Datum(Datum::Nil) = list {
 		return Datum::Nil;
 	}
-	let Expression::Expression { head, tail } = list else { return Datum::err() };
-	let head = eval(env, head);
-	let tail = eval_list(env, tail);
-	Datum::List { head: Box::new(head), tail: Box::new(tail) }
+	match list {
+		Expression::Expression { head, tail } => {
+			let head = eval(env, head);
+			let tail = eval_list(env, tail);
+			Datum::List { head: Box::new(head), tail: Box::new(tail) }
+		}
+		Expression::Datum(Datum::Quoted(expr)) => unquote(expr),
+		_ => Datum::err(),
+	}
 }
 
 fn closure(env: &Env<'_>, mut formals: &Expression, body: &Expression, mut args: Datum) -> Datum {

@@ -1,3 +1,6 @@
+(define (err? x)
+  (eq? x 'ERR))
+
 (define (list . args)
   args)
 
@@ -19,7 +22,21 @@
           (apply or (cdr args)))))
 
 (define (pair? x)
-  (or (nil? x) (not (eq? 'ERR (cdr x)))))
+  (not (err? (cdr x))))
+
+(define (list? x)
+  (if (nil? x)
+      #t
+      (if (pair? x)
+          (list? (cdr x))
+          #f)))
+
+(define (cadr list)
+  (car (cdr list)))
+(define (caddr list)
+  (cadr (cdr list)))
+(define (cadddr list)
+  (caddr (cdr list)))
 
 (define (list-length list)
   (if (pair? list)
