@@ -52,29 +52,56 @@ fn eval(env: &mut Env<'_>, expr: &Expression) -> Datum {
 			Expression::Datum(Datum::Symbol(IF)) => if_then_else(env, args),
 			_ => {
 				let head = eval(env, head);
-				let args = eval_list(env, args);
-				apply(env, head, args)
+				if let Datum::Void = head {
+					eval(env, args)
+				} else {
+					let args = eval_list(env, args);
+					apply(env, head, args)
+				}
 			}
 		},
 	}
 }
 
+fn is_define(expr: &Expression) -> bool {
+	matches!(expr, Expression::Expression { head, .. } if matches!(
+		&**head, Expression::Datum(Datum::Symbol(DEFINE))
+	))
+}
+
 fn define(env: &mut Env<'_>, args: &Expression) -> Datum {
-	let Expression::Expression { head: defined, tail: value } = args else { return Datum::err() };
-	let Expression::Expression { head: value, tail: nil } = &**value else { return Datum::err() };
-	let Expression::Datum(Datum::Nil) = &**nil else { return Datum::err() };
+	let Expression::Expression { head: defined, tail: body } = args else { return Datum::err() };
 	match &**defined {
 		Expression::Datum(Datum::Symbol(symbol)) => {
+			let Expression::Expression { head: value, tail: nil } = &**body else {
+				return Datum::err();
+			};
+			let Expression::Datum(Datum::Nil) = &**nil else { return Datum::err() };
 			let value = eval(env, value);
 			env.insert(symbol.clone(), value);
 			Datum::Void
 		}
 		Expression::Datum(_) => Datum::err(),
-		Expression::Expression { head, tail: formals } => {
-			let Some(symbol) = head.as_symbol() else { return Datum::err() };
+		Expression::Expression { head: symbol, tail: formals } => {
+			fn collect_body(body: &Expression) -> Option<Box<Expression>> {
+				let Expression::Expression { head: body, tail: trailing } = body else {
+					return None;
+				};
+				if is_define(body) {
+					Some(Box::new(Expression::Expression {
+						head: body.clone(),
+						tail: collect_body(trailing)?,
+					}))
+				} else {
+					let Expression::Datum(Datum::Nil) = &**trailing else { return None };
+					Some(body.clone())
+				}
+			}
+			let Some(symbol) = symbol.as_symbol() else { return Datum::err() };
+			let Some(body) = collect_body(body) else { return Datum::err() };
 			env.insert(
 				symbol.clone(),
-				Datum::Closure { formals: formals.clone(), body: value.clone() },
+				Datum::Closure { formals: formals.clone(), body: body.clone() },
 			);
 			Datum::Void
 		}

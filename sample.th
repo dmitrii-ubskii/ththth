@@ -2,14 +2,13 @@
   (/ (+ a b) 2))
 
 (define (good-enough? guess prev-guess)
-  (< (abs (- (/ guess prev-guess) 1)) 1e-3))
-
-(define (iter guess prev-guess)
-  (if (good-enough? guess prev-guess)
-    guess
-    (iter (mean guess (/ x guess)) guess)))
+  (< (abs (- (/ guess prev-guess) 1)) 1e-9))
 
 (define (sqrt x)
+  (define (iter guess prev-guess)
+    (if (good-enough? guess prev-guess)
+        guess
+        (iter (mean guess (/ x guess)) guess)))
   (iter (/ x 2.0) x))
 
 (sqrt 2)
