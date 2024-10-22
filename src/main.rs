@@ -3,14 +3,12 @@
 
 use std::{
 	collections::HashMap,
-	env,
-	error::Error,
-	fmt, fs,
+	env, fs,
 	io::{stdin, Read},
 };
 
-use builtin::{APPLY, CONS, DEFINE};
-use data::{Atom, Datum, Expression};
+use builtin::{DEFINE, LAMBDA};
+use data::{Datum, Expression};
 use string::GString;
 
 mod builtin;
@@ -18,170 +16,132 @@ mod data;
 mod parse;
 mod string;
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() {
 	let input = match env::args().nth(1) {
-		Some(path) => fs::read_to_string(path)?,
+		Some(path) => fs::read_to_string(path).unwrap(),
 		None => {
 			let mut buf = String::new();
-			stdin().read_to_string(&mut buf)?;
+			stdin().read_to_string(&mut buf).unwrap();
 			buf
 		}
 	};
 
 	let mut global_env = builtin::init_builtins();
 
-	let program = parse::parse(input.trim())?;
+	let program = parse::parse(input.trim());
 	for expr in &program {
-		let res = eval(&mut global_env, expr)?;
+		let res = eval(&mut global_env, expr);
 		if !matches!(res, Datum::Void) {
 			println!("{}", res);
 		}
 	}
-	Ok(())
 }
 
-fn eval(env: &mut Env<'_>, expr: &Expression) -> Result<Datum, EvaluationError> {
+fn eval(env: &mut Env<'_>, expr: &Expression) -> Datum {
 	match expr {
-		Expression::Atom(atom) => eval_atom(env, atom),
-		Expression::Expression { head, tail } => match &**head {
-			Expression::Atom(Atom::Symbol(APPLY)) => {
-				let Expression::Expression { head, tail } = &**tail else {
-					return Err(EvaluationError::Application {});
-				};
-				let Datum::Expression { formals, expression } = eval(env, head)? else {
-					return Err(EvaluationError::Application {});
-				};
-				let tail = eval(env, tail)?;
-				apply(env, formals, expression, tail)
-			}
-			Expression::Atom(Atom::Symbol(DEFINE)) => {
-				define(env, tail)?;
-				Ok(Datum::Void)
-			}
-			Expression::Atom(Atom::Symbol(CONS)) => {
-				let Expression::Expression { head, tail } = &**tail else {
-					return Err(EvaluationError::BadSyntax);
-				};
-				let head = eval(env, head)?;
-				let tail = eval(env, tail)?;
-				Ok(Datum::List { head: Box::new(head), tail: Box::new(tail) })
-			}
-			Expression::Atom(atom) => {
-				let left = eval_atom(env, atom)?;
-				match left {
-					Datum::Void => todo!(),
-					atom @ Datum::Atom(_) if tail.is_nil() => Ok(atom),
-					Datum::Atom(_) => todo!("{left}"),
-					Datum::List { .. } => todo!(),
-					Datum::Expression { formals, expression } => {
-						let args = eval_list(env, tail)?;
-						apply(env, formals, expression, args)
-					}
-					Datum::Builtin(builtin) => builtin(tail, env),
-				}
-			}
-			Expression::Expression { .. } => {
-				let head = eval(env, head)?;
-				if tail.is_nil() {
-					Ok(head)
-				} else {
-					todo!()
-				}
+		Expression::Datum(atom) => eval_atom(env, atom),
+		Expression::Expression { head, tail: args } => match &**head {
+			Expression::Datum(Datum::Symbol(DEFINE)) => define(env, args),
+			Expression::Datum(Datum::Symbol(LAMBDA)) => lambda(env, args),
+			_ => {
+				let head = eval(env, head);
+				let args = eval_list(env, args);
+				apply(env, head, args)
 			}
 		},
 	}
 }
 
-fn eval_list(env: &mut Env<'_>, list: &Expression) -> Result<Datum, EvaluationError> {
-	assert!(list.is_list());
-	match list {
-		Expression::Atom(Atom::Nil) => Ok(Datum::Atom(Atom::Nil)),
-		Expression::Expression { head, tail } => Ok(Datum::List {
-			head: Box::new(eval(env, head)?),
-			tail: Box::new(eval_list(env, tail)?),
-		}),
-		Expression::Atom(_) => unreachable!(),
-	}
-}
-
-fn apply(
-	env: &mut Env<'_>,
-	formals: Vec<GString>,
-	expression: Expression,
-	args: Datum,
-) -> Result<Datum, EvaluationError> {
-	let mut local_env = Env::local(env);
-	populate_formals(&mut local_env, formals, args)?;
-	eval(&mut local_env, &expression)
-}
-
-fn populate_formals(
-	local_env: &mut Env<'_>,
-	formals: Vec<GString>,
-	right: Datum,
-) -> Result<(), EvaluationError> {
-	let mut args = match right.try_into_list() {
-		Ok(list) => list,
-		Err(_) => return Err(EvaluationError::BadSyntax),
-	};
-	for formal in formals {
-		let Some(arg) = args.next() else { return Err(EvaluationError::NotEnoughArgs { formal }) };
-		local_env.insert(formal, arg);
-	}
-	Ok(())
-}
-
-fn eval_atom(env: &Env<'_>, atom: &Atom) -> Result<Datum, EvaluationError> {
-	match atom {
-		Atom::Symbol(symbol) => match env.get(symbol) {
-			Some(datum) => Ok(datum.clone()),
-			None => Err(EvaluationError::UnboundSymbol { symbol: symbol.clone() }),
-		},
-		atom => Ok(Datum::Atom(atom.clone())),
-	}
-}
-
-fn define(env: &mut Env<'_>, args: &Expression) -> Result<(), EvaluationError> {
-	let Expression::Expression { head: defined, tail: value } = args else {
-		return Err(EvaluationError::DefineWrongNumberOfArgs { args: args.clone() });
-	};
-	let Expression::Expression { head: value, tail: nil } = &**value else {
-		return Err(EvaluationError::DefineWrongNumberOfArgs { args: args.clone() });
-	};
-	match &**nil {
-		Expression::Atom(Atom::Nil) => (),
-		_ => return Err(EvaluationError::DefineWrongNumberOfArgs { args: args.clone() }),
-	}
+fn define(env: &mut Env<'_>, args: &Expression) -> Datum {
+	let Expression::Expression { head: defined, tail: value } = args else { return Datum::Err };
+	let Expression::Expression { head: value, tail: nil } = &**value else { return Datum::Err };
+	let Expression::Datum(Datum::Nil) = &**nil else { return Datum::Err };
 	match &**defined {
-		Expression::Atom(Atom::Symbol(symbol)) => {
-			let value = eval(env, value)?;
+		Expression::Datum(Datum::Symbol(symbol)) => {
+			let value = eval(env, value);
 			env.insert(symbol.clone(), value);
-			Ok(())
+			Datum::Void
 		}
-		Expression::Atom(_) => Err(EvaluationError::DefineLeft { nonsymbol: (**defined).clone() }),
+		Expression::Datum(_) => Datum::Err,
 		Expression::Expression { head, tail: formals } => {
-			let Some(symbol) = head.as_symbol() else {
-				return Err(EvaluationError::DefineLeft { nonsymbol: (**head).clone() });
-			};
-			let formals = get_def_formals(formals)?;
+			let Some(symbol) = head.as_symbol() else { return Datum::Err };
 			env.insert(
 				symbol.clone(),
-				Datum::Expression { formals, expression: (**value).clone() },
+				Datum::Closure { formals: formals.clone(), body: value.clone() },
 			);
-			Ok(())
+			Datum::Void
 		}
 	}
 }
 
-fn get_def_formals(formals: &Expression) -> Result<Vec<GString>, EvaluationError> {
-	let Some(formal_list) = formals.as_list() else { return Err(EvaluationError::BadSyntax) };
-	let formals = formal_list
-		.map(|expr| match expr.as_symbol() {
-			Some(formal) => Ok::<_, EvaluationError>(formal.clone()),
-			None => todo!(),
-		})
-		.collect::<Result<_, _>>()?;
-	Ok(formals)
+fn lambda(_env: &mut Env<'_>, args: &Expression) -> Datum {
+	let Expression::Expression { head: formals, tail } = args else { return Datum::Err };
+	let Expression::Expression { head: body, tail: nil } = &**tail else { return Datum::Err };
+	let Expression::Datum(Datum::Nil) = &**nil else { return Datum::Err };
+	Datum::Closure { formals: formals.clone(), body: body.clone() }
+}
+
+fn eval_atom(env: &Env<'_>, datum: &Datum) -> Datum {
+	match datum {
+		Datum::Symbol(symbol) => match env.get(symbol) {
+			Some(datum) => datum.clone(),
+			None => Datum::Err,
+		},
+		datum => datum.clone(),
+	}
+}
+
+fn apply(env: &mut Env<'_>, head: Datum, args: Datum) -> Datum {
+	match &head {
+		Datum::Builtin(builtin) => builtin(env, args),
+		Datum::Closure { formals, body } => closure(env, formals, body, args),
+		_ => Datum::Err,
+	}
+}
+
+fn eval_list(env: &mut Env<'_>, list: &Expression) -> Datum {
+	if let Expression::Datum(Datum::Nil) = list {
+		return Datum::Nil;
+	}
+	let Expression::Expression { head, tail } = list else { return Datum::Err };
+	let head = eval(env, head);
+	let tail = eval_list(env, tail);
+	Datum::List { head: Box::new(head), tail: Box::new(tail) }
+}
+
+fn closure(
+	env: &Env<'_>,
+	mut formals: &Expression,
+	expression: &Expression,
+	mut args: Datum,
+) -> Datum {
+	let mut env = Env::local(env);
+	loop {
+		match formals {
+			Expression::Datum(datum) => match datum {
+				Datum::Nil => {
+					let Datum::Nil = args else { return Datum::Err };
+					break;
+				}
+				Datum::Symbol(symbol) => {
+					let list = args;
+					env.insert(symbol.clone(), list);
+					break;
+				}
+				_ => return Datum::Err,
+			},
+			Expression::Expression { head, tail } => {
+				let Expression::Datum(Datum::Symbol(binding)) = &**head else { return Datum::Err };
+				let Datum::List { head: arg, tail: arg_tail } = args else {
+					return Datum::Err;
+				};
+				env.insert(binding.clone(), *arg);
+				formals = tail;
+				args = *arg_tail;
+			}
+		}
+	}
+	eval(&mut env, expression)
 }
 
 #[derive(Default)]
@@ -211,39 +171,3 @@ impl Env<'_> {
 		self.local.get(symbol).or_else(|| self.outer.and_then(|outer| outer.get(symbol)))
 	}
 }
-
-enum EvaluationError {
-	BadSyntax,
-	Application {},
-	UnboundSymbol { symbol: GString },
-	NotEnoughArgs { formal: GString },
-	DefineWrongNumberOfArgs { args: Expression },
-	DefineLeft { nonsymbol: Expression },
-}
-
-impl fmt::Debug for EvaluationError {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{self}")
-	}
-}
-
-impl fmt::Display for EvaluationError {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match self {
-			Self::BadSyntax => write!(f, "bad syntax"),
-			Self::Application { .. } => todo!(),
-			Self::UnboundSymbol { symbol } => write!(f, "unbound symbol {symbol}"),
-			Self::NotEnoughArgs { formal } => {
-				write!(f, "no value to substitute for argument `{formal}`")
-			}
-			Self::DefineWrongNumberOfArgs { args } => {
-				write!(f, "wrong number of arguments to `define`: {args}")
-			}
-			Self::DefineLeft { nonsymbol } => {
-				write!(f, "expected symbol in define, found: {nonsymbol}")
-			}
-		}
-	}
-}
-
-impl Error for EvaluationError {}

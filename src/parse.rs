@@ -1,19 +1,14 @@
-use std::{
-	error::Error,
-	iter::{self, Peekable},
-};
+use std::iter::{self, Peekable};
 
-use crate::{Atom, Expression};
+use crate::{data::Datum, Expression};
 
-pub fn parse(mut input: &str) -> Result<Vec<Expression>, Box<dyn Error>> {
+pub fn parse(mut input: &str) -> Vec<Expression> {
 	if input.is_empty() {
-		return Err("Unexpected EOF".into());
+		return vec![Expression::Datum(Datum::Err)];
 	}
 	let mut input = iter::from_fn(|| read_token(&mut input)).peekable();
-	Ok(iter::from_fn(
-		|| if input.peek().is_none() { None } else { Some(parse_statement(&mut input)) },
-	)
-	.collect())
+	iter::from_fn(|| if input.peek().is_none() { None } else { Some(parse_statement(&mut input)) })
+		.collect()
 }
 
 fn read_token<'a>(input: &mut &'a str) -> Option<&'a str> {
@@ -56,19 +51,20 @@ fn read_token<'a>(input: &mut &'a str) -> Option<&'a str> {
 fn parse_statement<'a>(input: &mut Peekable<impl Iterator<Item = &'a str>>) -> Expression {
 	match input.next().unwrap() {
 		"(" => parse_expr(input),
-		atom => Expression::Atom(parse_atom(atom)),
+		")" | "." => Expression::Datum(Datum::Err),
+		atom => Expression::Datum(parse_atom(atom)),
 	}
 }
 
-fn parse_atom(atom: &str) -> Atom {
+fn parse_atom(atom: &str) -> Datum {
 	match atom {
-		"#t" => Atom::Boolean(true),
-		"#f" => Atom::Boolean(false),
+		"#t" => Datum::Boolean(true),
+		"#f" => Datum::Boolean(false),
 		atom => {
 			if let Ok(num) = atom.parse() {
-				Atom::Number(num)
+				Datum::Number(num)
 			} else {
-				Atom::Symbol(atom.into())
+				Datum::Symbol(atom.into())
 			}
 		}
 	}
@@ -76,15 +72,21 @@ fn parse_atom(atom: &str) -> Atom {
 
 fn parse_expr<'a>(input: &mut Peekable<impl Iterator<Item = &'a str>>) -> Expression {
 	let left = match input.next().unwrap() {
-		")" => return Expression::Atom(Atom::Nil),
+		")" => return Expression::Datum(Datum::Nil),
 		"(" => parse_expr(input),
-		atom => Expression::Atom(parse_atom(atom)),
+		atom => Expression::Datum(parse_atom(atom)),
 	};
 
 	let right = match *input.peek().unwrap() {
 		")" => {
 			input.next();
-			Expression::Atom(Atom::Nil)
+			Expression::Datum(Datum::Nil)
+		}
+		"." => {
+			input.next();
+			let right = parse_statement(input);
+			let Some(")") = input.next() else { return Expression::Datum(Datum::Err) };
+			right
 		}
 		_ => parse_expr(input),
 	};
