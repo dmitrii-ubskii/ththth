@@ -35,7 +35,7 @@ impl fmt::Display for Expression {
 					match tail {
 						Self::Datum(Datum::Nil) => break,
 						Self::Datum(atom) => {
-							write!(f, ". {atom}")?;
+							write!(f, " . {atom}")?;
 							break;
 						}
 						Self::Expression { head, tail: new_tail } => {
@@ -73,7 +73,7 @@ impl fmt::Debug for Datum {
 impl fmt::Display for Datum {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			Self::Void => Ok(()),
+			Self::Void => write!(f, "<void>"),
 			Self::Err => write!(f, "ERR"),
 			Self::Nil => write!(f, "()"),
 			Self::Boolean(true) => write!(f, "#t"),
@@ -88,10 +88,6 @@ impl fmt::Display for Datum {
 				let mut tail: &Self = tail;
 				loop {
 					match tail {
-						Self::Void => {
-							write!(f, " . <void>")?;
-							break;
-						}
 						Self::Nil => break,
 						Self::List { head, tail: next } => {
 							write!(f, " {head}")?;

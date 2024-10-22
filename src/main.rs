@@ -7,7 +7,7 @@ use std::{
 	io::{stdin, Read},
 };
 
-use builtin::{DEFINE, LAMBDA};
+use builtin::{DEFINE, IF, LAMBDA};
 use data::{Datum, Expression};
 use string::GString;
 
@@ -15,6 +15,8 @@ mod builtin;
 mod data;
 mod parse;
 mod string;
+
+const STD: &str = include_str!("std.th");
 
 fn main() {
 	let input = match env::args().nth(1) {
@@ -27,6 +29,10 @@ fn main() {
 	};
 
 	let mut global_env = builtin::init_builtins();
+
+	for expr in parse::parse(STD.trim()) {
+		eval(&mut global_env, &expr);
+	}
 
 	let program = parse::parse(input.trim());
 	for expr in &program {
@@ -43,6 +49,7 @@ fn eval(env: &mut Env<'_>, expr: &Expression) -> Datum {
 		Expression::Expression { head, tail: args } => match &**head {
 			Expression::Datum(Datum::Symbol(DEFINE)) => define(env, args),
 			Expression::Datum(Datum::Symbol(LAMBDA)) => lambda(env, args),
+			Expression::Datum(Datum::Symbol(IF)) => if_then_else(env, args),
 			_ => {
 				let head = eval(env, head);
 				let args = eval_list(env, args);
@@ -79,6 +86,21 @@ fn lambda(_env: &mut Env<'_>, args: &Expression) -> Datum {
 	let Expression::Expression { head: body, tail: nil } = &**tail else { return Datum::Err };
 	let Expression::Datum(Datum::Nil) = &**nil else { return Datum::Err };
 	Datum::Closure { formals: formals.clone(), body: body.clone() }
+}
+
+fn if_then_else(env: &mut Env<'_>, args: &Expression) -> Datum {
+	let Expression::Expression { head: cond, tail: branches } = args else { return Datum::Err };
+	let Expression::Expression { head: then_branch, tail } = &**branches else { return Datum::Err };
+	let Expression::Expression { head: else_branch, tail: nil } = &**tail else {
+		return Datum::Err;
+	};
+	let Expression::Datum(Datum::Nil) = &**nil else { return Datum::Err };
+	let Datum::Boolean(bool) = eval(env, cond) else { return Datum::Err };
+	if bool {
+		eval(env, then_branch)
+	} else {
+		eval(env, else_branch)
+	}
 }
 
 fn eval_atom(env: &Env<'_>, datum: &Datum) -> Datum {

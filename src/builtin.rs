@@ -2,8 +2,11 @@ use crate::{apply, data::Datum, string::GString, Env};
 
 pub const DEFINE: GString = GString::from_bytes(b"define");
 pub const LAMBDA: GString = GString::from_bytes(b"lambda");
+pub const IF: GString = GString::from_bytes(b"if");
 
 const APPLY: GString = GString::from_bytes(b"apply");
+
+const IS_NIL: GString = GString::from_bytes(b"nil?");
 
 const CONS: GString = GString::from_bytes(b"cons");
 const CAR: GString = GString::from_bytes(b"car");
@@ -21,6 +24,8 @@ pub fn init_builtins() -> Env<'static> {
 	env.insert(CONS, Datum::Builtin(cons));
 	env.insert(CAR, Datum::Builtin(car));
 	env.insert(CDR, Datum::Builtin(cdr));
+
+	env.insert(IS_NIL, Datum::Builtin(is_nil));
 
 	env.insert(PLUS, Datum::Builtin(plus));
 	env.insert(MINUS, Datum::Builtin(minus));
@@ -44,13 +49,26 @@ pub fn cons(_env: &mut Env<'_>, args: Datum) -> Datum {
 }
 
 pub fn car(_env: &mut Env<'_>, args: Datum) -> Datum {
-	let Datum::List { head, tail: _ } = args else { return Datum::Err };
+	let Datum::List { head: list, tail: nil } = args else { return Datum::Err };
+	let Datum::Nil = *nil else { return Datum::Err };
+	let Datum::List { head, tail: _ } = *list else { return Datum::Err };
 	*head
 }
 
 pub fn cdr(_env: &mut Env<'_>, args: Datum) -> Datum {
-	let Datum::List { head: _, tail } = args else { return Datum::Err };
+	let Datum::List { head: list, tail: nil } = args else { return Datum::Err };
+	let Datum::Nil = *nil else { return Datum::Err };
+	let Datum::List { head: _, tail } = *list else { return Datum::Err };
 	*tail
+}
+
+pub fn is_nil(_env: &mut Env<'_>, args: Datum) -> Datum {
+	let Datum::List { head: arg, tail: nil } = args else { return Datum::Err };
+	let Datum::Nil = *nil else { return Datum::Err };
+	match *arg {
+		Datum::Nil => Datum::Boolean(true),
+		_ => Datum::Boolean(false),
+	}
 }
 
 fn plus(_env: &mut Env<'_>, args: Datum) -> Datum {

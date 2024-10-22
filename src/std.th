@@ -1,0 +1,2 @@
+(define (list . args) args)
+(define (not x) (if x #f #t))
