@@ -27,3 +27,8 @@
 
 (define (abs x) (if (< x 0) (- x) x))
 (define (nan? x) (not (= x x)))
+
+(define (integer? x) (= (trunc x) x))
+
+(define (even? x) (and (integer? x) (= (remainder x 2) 0)))
+(define (odd? x) (and (integer? x) (not (even? x))))

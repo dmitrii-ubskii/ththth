@@ -3,9 +3,13 @@ use crate::{apply, data::Datum, string::GString, Env};
 pub const DEFINE: GString = GString::from_bytes(b"define");
 pub const LAMBDA: GString = GString::from_bytes(b"lambda");
 pub const IF: GString = GString::from_bytes(b"if");
+pub const COND: GString = GString::from_bytes(b"cond");
+pub const ELSE: GString = GString::from_bytes(b"else");
 pub const ERR: GString = GString::from_bytes(b"ERR");
 
 const APPLY: GString = GString::from_bytes(b"apply");
+const DISPLAY: GString = GString::from_bytes(b"display");
+const NEWLINE: GString = GString::from_bytes(b"newline");
 
 const IS_NIL: GString = GString::from_bytes(b"nil?");
 const IS_EQ: GString = GString::from_bytes(b"eq?");
@@ -24,10 +28,16 @@ const PLUS: GString = GString::from_bytes(b"+");
 const MINUS: GString = GString::from_bytes(b"-");
 const MULTIPLY: GString = GString::from_bytes(b"*");
 const DIVIDE: GString = GString::from_bytes(b"/");
+const REMAINDER: GString = GString::from_bytes(b"remainder");
+
+const TRUNC: GString = GString::from_bytes(b"trunc");
 
 pub fn init_builtins() -> Env<'static> {
 	let mut env = Env::new();
+
 	env.insert(APPLY, Datum::Builtin(apply_f));
+	env.insert(DISPLAY, Datum::Builtin(display));
+	env.insert(NEWLINE, Datum::Builtin(newline));
 
 	env.insert(CONS, Datum::Builtin(cons));
 	env.insert(CAR, Datum::Builtin(car));
@@ -46,6 +56,11 @@ pub fn init_builtins() -> Env<'static> {
 	env.insert(MINUS, Datum::Builtin(minus));
 	env.insert(MULTIPLY, Datum::Builtin(multiply));
 	env.insert(DIVIDE, Datum::Builtin(divide));
+
+	env.insert(REMAINDER, Datum::Builtin(remainder));
+
+	env.insert(TRUNC, Datum::Builtin(trunc));
+
 	env
 }
 
@@ -54,6 +69,19 @@ fn apply_f(env: &mut Env<'_>, args: Datum) -> Datum {
 	let Datum::List { head: args, tail: nil } = *tail else { return Datum::err() };
 	let Datum::Nil = *nil else { return Datum::err() };
 	apply(env, *f, *args)
+}
+
+fn display(_env: &mut Env<'_>, args: Datum) -> Datum {
+	let Datum::List { head: arg, tail: nil } = args else { return Datum::err() };
+	let Datum::Nil = *nil else { return Datum::err() };
+	print!("{arg} ");
+	Datum::Void
+}
+
+fn newline(_env: &mut Env<'_>, args: Datum) -> Datum {
+	let Datum::Nil = args else { return Datum::err() };
+	println!();
+	Datum::Void
 }
 
 pub fn cons(_env: &mut Env<'_>, args: Datum) -> Datum {
@@ -103,7 +131,6 @@ macro_rules! cmp {
 					let Datum::Boolean(tail_eq) = $cmp(_env, *tail.clone()) else {
 						return Datum::err();
 					};
-
 					let Datum::List { head: rhs, tail: _ } = *tail else {
 						return Datum::Boolean(true);
 					};
@@ -169,6 +196,30 @@ fn divide(env: &mut Env<'_>, args: Datum) -> Datum {
 			let Datum::Number(lhs) = *head else { return Datum::err() };
 			let Datum::Number(rhs) = multiply(env, *tail) else { return Datum::err() };
 			Datum::Number(lhs / rhs)
+		}
+		_ => Datum::err(),
+	}
+}
+
+fn remainder(_env: &mut Env<'_>, args: Datum) -> Datum {
+	match args {
+		Datum::List { head: lhs, tail } => {
+			let Datum::Number(lhs) = *lhs else { return Datum::err() };
+			let Datum::List { head: rhs, tail: nil } = *tail else { return Datum::err() };
+			let Datum::Nil = *nil else { return Datum::err() };
+			let Datum::Number(rhs) = *rhs else { return Datum::err() };
+			Datum::Number(lhs % rhs)
+		}
+		_ => Datum::err(),
+	}
+}
+
+fn trunc(_env: &mut Env<'_>, args: Datum) -> Datum {
+	match args {
+		Datum::List { head, tail } => {
+			let Datum::Nil = *tail else { return Datum::err() };
+			let Datum::Number(lhs) = *head else { return Datum::err() };
+			Datum::Number(lhs.trunc())
 		}
 		_ => Datum::err(),
 	}
