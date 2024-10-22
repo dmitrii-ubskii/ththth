@@ -195,6 +195,7 @@ fn closure(env: &Env<'_>, mut formals: &Expression, body: &Expression, mut args:
 			}
 		}
 	}
+
 	fn eval_closure(env: &mut Env<'_>, body: &Expression) -> Datum {
 		let Expression::Expression { head, tail } = body else { return Datum::err() };
 		let res = eval(env, head);
@@ -209,6 +210,7 @@ fn closure(env: &Env<'_>, mut formals: &Expression, body: &Expression, mut args:
 			res
 		}
 	}
+
 	eval_closure(&mut env, body)
 }
 

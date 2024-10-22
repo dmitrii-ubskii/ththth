@@ -30,21 +30,27 @@ fn read_token<'a>(input: &mut &'a str) -> Option<&'a str> {
 			char_indices.next();
 		},
 	}
-	let whitespace_end;
+	let skip_until;
 	loop {
 		let Some(&(idx, next_char)) = char_indices.peek() else {
-			whitespace_end = input.len();
+			skip_until = input.len();
 			break;
 		};
-		if !next_char.is_whitespace() {
-			whitespace_end = idx;
+		if next_char == ';' {
+			for (_, c) in char_indices.by_ref() {
+				if c == '\n' {
+					break;
+				}
+			}
+		} else if !next_char.is_whitespace() {
+			skip_until = idx;
 			break;
 		}
 		char_indices.next();
 	}
 
 	let token = &input[..token_len];
-	*input = &input[whitespace_end..];
+	*input = &input[skip_until..];
 	Some(token)
 }
 
