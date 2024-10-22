@@ -60,18 +60,18 @@ fn eval(env: &mut Env<'_>, expr: &Expression) -> Datum {
 }
 
 fn define(env: &mut Env<'_>, args: &Expression) -> Datum {
-	let Expression::Expression { head: defined, tail: value } = args else { return Datum::Err };
-	let Expression::Expression { head: value, tail: nil } = &**value else { return Datum::Err };
-	let Expression::Datum(Datum::Nil) = &**nil else { return Datum::Err };
+	let Expression::Expression { head: defined, tail: value } = args else { return Datum::err() };
+	let Expression::Expression { head: value, tail: nil } = &**value else { return Datum::err() };
+	let Expression::Datum(Datum::Nil) = &**nil else { return Datum::err() };
 	match &**defined {
 		Expression::Datum(Datum::Symbol(symbol)) => {
 			let value = eval(env, value);
 			env.insert(symbol.clone(), value);
 			Datum::Void
 		}
-		Expression::Datum(_) => Datum::Err,
+		Expression::Datum(_) => Datum::err(),
 		Expression::Expression { head, tail: formals } => {
-			let Some(symbol) = head.as_symbol() else { return Datum::Err };
+			let Some(symbol) = head.as_symbol() else { return Datum::err() };
 			env.insert(
 				symbol.clone(),
 				Datum::Closure { formals: formals.clone(), body: value.clone() },
@@ -82,20 +82,22 @@ fn define(env: &mut Env<'_>, args: &Expression) -> Datum {
 }
 
 fn lambda(_env: &mut Env<'_>, args: &Expression) -> Datum {
-	let Expression::Expression { head: formals, tail } = args else { return Datum::Err };
-	let Expression::Expression { head: body, tail: nil } = &**tail else { return Datum::Err };
-	let Expression::Datum(Datum::Nil) = &**nil else { return Datum::Err };
+	let Expression::Expression { head: formals, tail } = args else { return Datum::err() };
+	let Expression::Expression { head: body, tail: nil } = &**tail else { return Datum::err() };
+	let Expression::Datum(Datum::Nil) = &**nil else { return Datum::err() };
 	Datum::Closure { formals: formals.clone(), body: body.clone() }
 }
 
 fn if_then_else(env: &mut Env<'_>, args: &Expression) -> Datum {
-	let Expression::Expression { head: cond, tail: branches } = args else { return Datum::Err };
-	let Expression::Expression { head: then_branch, tail } = &**branches else { return Datum::Err };
-	let Expression::Expression { head: else_branch, tail: nil } = &**tail else {
-		return Datum::Err;
+	let Expression::Expression { head: cond, tail: branches } = args else { return Datum::err() };
+	let Expression::Expression { head: then_branch, tail } = &**branches else {
+		return Datum::err();
 	};
-	let Expression::Datum(Datum::Nil) = &**nil else { return Datum::Err };
-	let Datum::Boolean(bool) = eval(env, cond) else { return Datum::Err };
+	let Expression::Expression { head: else_branch, tail: nil } = &**tail else {
+		return Datum::err();
+	};
+	let Expression::Datum(Datum::Nil) = &**nil else { return Datum::err() };
+	let Datum::Boolean(bool) = eval(env, cond) else { return Datum::err() };
 	if bool {
 		eval(env, then_branch)
 	} else {
@@ -107,9 +109,19 @@ fn eval_atom(env: &Env<'_>, datum: &Datum) -> Datum {
 	match datum {
 		Datum::Symbol(symbol) => match env.get(symbol) {
 			Some(datum) => datum.clone(),
-			None => Datum::Err,
+			None => Datum::err(),
 		},
+		Datum::Quoted(quoted) => unquote(quoted),
 		datum => datum.clone(),
+	}
+}
+
+fn unquote(quoted: &Expression) -> Datum {
+	match quoted {
+		Expression::Datum(datum) => datum.clone(),
+		Expression::Expression { head, tail } => {
+			Datum::List { head: Box::new(unquote(head)), tail: Box::new(unquote(tail)) }
+		}
 	}
 }
 
@@ -117,7 +129,7 @@ fn apply(env: &mut Env<'_>, head: Datum, args: Datum) -> Datum {
 	match &head {
 		Datum::Builtin(builtin) => builtin(env, args),
 		Datum::Closure { formals, body } => closure(env, formals, body, args),
-		_ => Datum::Err,
+		_ => Datum::err(),
 	}
 }
 
@@ -125,7 +137,7 @@ fn eval_list(env: &mut Env<'_>, list: &Expression) -> Datum {
 	if let Expression::Datum(Datum::Nil) = list {
 		return Datum::Nil;
 	}
-	let Expression::Expression { head, tail } = list else { return Datum::Err };
+	let Expression::Expression { head, tail } = list else { return Datum::err() };
 	let head = eval(env, head);
 	let tail = eval_list(env, tail);
 	Datum::List { head: Box::new(head), tail: Box::new(tail) }
@@ -142,7 +154,7 @@ fn closure(
 		match formals {
 			Expression::Datum(datum) => match datum {
 				Datum::Nil => {
-					let Datum::Nil = args else { return Datum::Err };
+					let Datum::Nil = args else { return Datum::err() };
 					break;
 				}
 				Datum::Symbol(symbol) => {
@@ -150,12 +162,14 @@ fn closure(
 					env.insert(symbol.clone(), list);
 					break;
 				}
-				_ => return Datum::Err,
+				_ => return Datum::err(),
 			},
 			Expression::Expression { head, tail } => {
-				let Expression::Datum(Datum::Symbol(binding)) = &**head else { return Datum::Err };
+				let Expression::Datum(Datum::Symbol(binding)) = &**head else {
+					return Datum::err();
+				};
 				let Datum::List { head: arg, tail: arg_tail } = args else {
-					return Datum::Err;
+					return Datum::err();
 				};
 				env.insert(binding.clone(), *arg);
 				formals = tail;

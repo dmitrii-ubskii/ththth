@@ -1,5 +1,16 @@
-(list 1 2 3 4)
-(nil? (list))
-(not #f)
-(not #t)
-(not (nil? ()))
+(define (mean a b)
+  (/ (+ a b) 2))
+
+(define (good-enough? guess prev-guess)
+  (< (abs (- (/ guess prev-guess) 1)) 1e-3))
+
+(define (iter guess prev-guess)
+  (if (good-enough? guess prev-guess)
+    guess
+    (iter (mean guess (/ x guess)) guess)))
+
+(define (sqrt x)
+  (iter (/ x 2.0) x))
+
+(sqrt 2)
+(sqrt 9)

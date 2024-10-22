@@ -1,8 +1,8 @@
 use std::fmt;
 
-use crate::{string::GString, Env};
+use crate::{builtin::ERR, string::GString, Env};
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum Expression {
 	Datum(Datum),
 	Expression { head: Box<Expression>, tail: Box<Expression> },
@@ -51,17 +51,23 @@ impl fmt::Display for Expression {
 	}
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum Datum {
 	Void,
-	Err,
 	Nil,
 	Boolean(bool),
 	Number(f64),
 	Symbol(GString),
+	Quoted(Box<Expression>),
 	List { head: Box<Datum>, tail: Box<Datum> },
 	Closure { formals: Box<Expression>, body: Box<Expression> },
 	Builtin(fn(&mut Env<'_>, Datum) -> Datum),
+}
+
+impl Datum {
+	pub fn err() -> Self {
+		Datum::Symbol(ERR)
+	}
 }
 
 impl fmt::Debug for Datum {
@@ -74,12 +80,12 @@ impl fmt::Display for Datum {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Self::Void => write!(f, "<void>"),
-			Self::Err => write!(f, "ERR"),
 			Self::Nil => write!(f, "()"),
 			Self::Boolean(true) => write!(f, "#t"),
 			Self::Boolean(false) => write!(f, "#f"),
 			Self::Number(num) => write!(f, "{num}"),
 			Self::Symbol(sym) => write!(f, "{sym}"),
+			Self::Quoted(quoted) => write!(f, "{quoted}"),
 			Self::Closure { formals, body } => write!(f, "(lambda {formals} {body})"),
 			Self::Builtin(_) => write!(f, "#builtin"),
 			Self::List { head, tail } => {

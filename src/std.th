@@ -1,2 +1,28 @@
 (define (list . args) args)
 (define (not x) (if x #f #t))
+
+(define (and . args)
+  (if (nil? args)
+      #t
+      (if (car args)
+          (apply and (cdr args))
+          #f)))
+
+(define (or . args)
+  (if (nil? args)
+      #f
+      (if (car args)
+          #t
+          (apply or (cdr args)))))
+
+(define (pair? x)
+  (or (nil? x) (not (eq? 'ERR (cdr x)))))
+
+(define (list-length list)
+  (if (pair? list)
+      (if (nil? list)
+          0
+          (+ 1 (list-length (cdr list))))
+      'ERR))
+
+(define (abs x) (if (< x 0) (- x) x))

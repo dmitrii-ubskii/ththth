@@ -4,7 +4,7 @@ use crate::{data::Datum, Expression};
 
 pub fn parse(mut input: &str) -> Vec<Expression> {
 	if input.is_empty() {
-		return vec![Expression::Datum(Datum::Err)];
+		return vec![Expression::Datum(Datum::err())];
 	}
 	let mut input = iter::from_fn(|| read_token(&mut input)).peekable();
 	iter::from_fn(|| if input.peek().is_none() { None } else { Some(parse_statement(&mut input)) })
@@ -17,7 +17,7 @@ fn read_token<'a>(input: &mut &'a str) -> Option<&'a str> {
 	assert!(!first_char.is_whitespace(), "{first_char:?}");
 	let token_len;
 	match first_char {
-		'(' | ')' => token_len = 1,
+		'(' | ')' | '\'' => token_len = 1,
 		_ => loop {
 			let Some(&(idx, next_char)) = char_indices.peek() else {
 				token_len = input.len();
@@ -51,7 +51,8 @@ fn read_token<'a>(input: &mut &'a str) -> Option<&'a str> {
 fn parse_statement<'a>(input: &mut Peekable<impl Iterator<Item = &'a str>>) -> Expression {
 	match input.next().unwrap() {
 		"(" => parse_expr(input),
-		")" | "." => Expression::Datum(Datum::Err),
+		")" | "." => Expression::Datum(Datum::err()),
+		"'" => Expression::Datum(Datum::Quoted(Box::new(parse_statement(input)))),
 		atom => Expression::Datum(parse_atom(atom)),
 	}
 }
@@ -74,6 +75,7 @@ fn parse_expr<'a>(input: &mut Peekable<impl Iterator<Item = &'a str>>) -> Expres
 	let left = match input.next().unwrap() {
 		")" => return Expression::Datum(Datum::Nil),
 		"(" => parse_expr(input),
+		"'" => Expression::Datum(Datum::Quoted(Box::new(parse_statement(input)))),
 		atom => Expression::Datum(parse_atom(atom)),
 	};
 
@@ -85,7 +87,7 @@ fn parse_expr<'a>(input: &mut Peekable<impl Iterator<Item = &'a str>>) -> Expres
 		"." => {
 			input.next();
 			let right = parse_statement(input);
-			let Some(")") = input.next() else { return Expression::Datum(Datum::Err) };
+			let Some(")") = input.next() else { return Expression::Datum(Datum::err()) };
 			right
 		}
 		_ => parse_expr(input),
