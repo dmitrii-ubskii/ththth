@@ -38,12 +38,12 @@
 (define (cadddr list)
   (caddr (cdr list)))
 
-(define (list-length list)
-  (if (pair? list)
-      (if (nil? list)
-          0
-          (+ 1 (list-length (cdr list))))
-      'ERR))
+(define (length list)
+  (if (nil? list)
+      0
+      (if (pair? list)
+          (+ 1 (length (cdr list)))
+          'ERR)))
 
 (define (abs x)
   (if (< x 0)
