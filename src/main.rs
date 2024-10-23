@@ -7,7 +7,7 @@ use std::{
 	io::{stdin, Read},
 };
 
-use builtin::{COND, DEFINE, ELSE, IF, LAMBDA, LET};
+use builtin::{COND, DEFINE, ELSE, IF, LAMBDA, LET, WHEN};
 use data::{Datum, Expression};
 use string::GString;
 
@@ -51,6 +51,7 @@ fn eval(env: &mut Env<'_>, expr: &Expression) -> Datum {
 			Expression::Datum(Datum::Symbol(LET)) => let_(env, args),
 			Expression::Datum(Datum::Symbol(LAMBDA)) => lambda(env, args),
 			Expression::Datum(Datum::Symbol(IF)) => if_then_else(env, args),
+			Expression::Datum(Datum::Symbol(WHEN)) => when(env, args),
 			Expression::Datum(Datum::Symbol(COND)) => cond(env, args),
 			_ => {
 				let head = eval(env, head);
@@ -143,6 +144,18 @@ fn if_then_else(env: &mut Env<'_>, args: &Expression) -> Datum {
 		eval(env, then_branch)
 	} else {
 		eval(env, else_branch)
+	}
+}
+
+fn when(env: &mut Env<'_>, args: &Expression) -> Datum {
+	let Expression::Expression { head: condition, tail: body } = args else {
+		return Datum::err();
+	};
+	let Datum::Boolean(bool) = eval(env, condition) else { return Datum::err() };
+	if bool {
+		eval_closure(env, body)
+	} else {
+		Datum::Void
 	}
 }
 

@@ -4,6 +4,7 @@ pub const DEFINE: GString = GString::from_bytes(b"define");
 pub const LET: GString = GString::from_bytes(b"let");
 pub const LAMBDA: GString = GString::from_bytes(b"lambda");
 pub const IF: GString = GString::from_bytes(b"if");
+pub const WHEN: GString = GString::from_bytes(b"when");
 pub const COND: GString = GString::from_bytes(b"cond");
 pub const ELSE: GString = GString::from_bytes(b"else");
 pub const ERR: GString = GString::from_bytes(b"ERR");
