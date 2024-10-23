@@ -6,6 +6,12 @@ pub fn parse(mut input: &str) -> Vec<Expression> {
 	if input.is_empty() {
 		return vec![Expression::Datum(Datum::err())];
 	}
+	while input.starts_with(';') {
+		match input.split_once('\n') {
+			Some((_comment, rest)) => input = rest.trim(),
+			None => return vec![Expression::Datum(Datum::err())],
+		}
+	}
 	let mut input = iter::from_fn(|| read_token(&mut input)).peekable();
 	iter::from_fn(|| if input.peek().is_none() { None } else { Some(parse_statement(&mut input)) })
 		.collect()
