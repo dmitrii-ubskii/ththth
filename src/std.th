@@ -41,9 +41,7 @@
 (define (length list)
   (if (nil? list)
       0
-      (if (pair? list)
-          (+ 1 (length (cdr list)))
-          'ERR)))
+      (+ 1 (length (cdr list)))))
 
 (define (abs x)
   (if (< x 0)
