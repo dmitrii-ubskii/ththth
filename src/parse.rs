@@ -45,8 +45,9 @@ fn read_token<'a>(input: &mut &'a str) -> Option<&'a str> {
 		} else if !next_char.is_whitespace() {
 			skip_until = idx;
 			break;
+		} else {
+			char_indices.next();
 		}
-		char_indices.next();
 	}
 
 	let token = &input[..token_len];
