@@ -7,7 +7,7 @@ use std::{
 	io::{stdin, Read},
 };
 
-use builtin::{COND, DEFINE, ELSE, IF, LAMBDA};
+use builtin::{COND, DEFINE, ELSE, IF, LAMBDA, LET};
 use data::{Datum, Expression};
 use string::GString;
 
@@ -48,6 +48,7 @@ fn eval(env: &mut Env<'_>, expr: &Expression) -> Datum {
 		Expression::Datum(atom) => eval_atom(env, atom),
 		Expression::Expression { head, tail: args } => match &**head {
 			Expression::Datum(Datum::Symbol(DEFINE)) => define(env, args),
+			Expression::Datum(Datum::Symbol(LET)) => let_(env, args),
 			Expression::Datum(Datum::Symbol(LAMBDA)) => lambda(env, args),
 			Expression::Datum(Datum::Symbol(IF)) => if_then_else(env, args),
 			Expression::Datum(Datum::Symbol(COND)) => cond(env, args),
@@ -57,6 +58,21 @@ fn eval(env: &mut Env<'_>, expr: &Expression) -> Datum {
 				apply(env, head, args)
 			}
 		},
+	}
+}
+
+fn eval_closure(env: &mut Env<'_>, body: &Expression) -> Datum {
+	let Expression::Expression { head, tail } = body else { return Datum::err() };
+	let res = eval(env, head);
+	if let Datum::Void = res {
+		if let Expression::Datum(Datum::Nil) = &**tail {
+			Datum::Void
+		} else {
+			eval_closure(env, tail)
+		}
+	} else {
+		let Expression::Datum(Datum::Nil) = &**tail else { return Datum::err() };
+		res
 	}
 }
 
@@ -82,6 +98,27 @@ fn define(env: &mut Env<'_>, args: &Expression) -> Datum {
 			Datum::Void
 		}
 	}
+}
+
+fn let_(env: &mut Env<'_>, args: &Expression) -> Datum {
+	let Expression::Expression { head: bindings, tail: body } = args else { return Datum::err() };
+
+	let mut env = Env::local(env);
+	let env = &mut env;
+
+	let mut bindings: &Expression = bindings;
+	loop {
+		match bindings {
+			Expression::Datum(Datum::Nil) => break,
+			Expression::Expression { head: binding, tail } => {
+				define(env, binding);
+				bindings = tail;
+			}
+			Expression::Datum(_) => return Datum::err(),
+		}
+	}
+
+	eval_closure(env, body)
 }
 
 fn lambda(env: &mut Env<'_>, args: &Expression) -> Datum {
@@ -202,21 +239,6 @@ fn closure(env: &Env<'_>, mut formals: &Expression, body: &Expression, mut args:
 				formals = tail;
 				args = *arg_tail;
 			}
-		}
-	}
-
-	fn eval_closure(env: &mut Env<'_>, body: &Expression) -> Datum {
-		let Expression::Expression { head, tail } = body else { return Datum::err() };
-		let res = eval(env, head);
-		if let Datum::Void = res {
-			if let Expression::Datum(Datum::Nil) = &**tail {
-				Datum::Void
-			} else {
-				eval_closure(env, tail)
-			}
-		} else {
-			let Expression::Datum(Datum::Nil) = &**tail else { return Datum::err() };
-			res
 		}
 	}
 

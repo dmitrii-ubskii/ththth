@@ -1,6 +1,7 @@
 use crate::{apply, data::Datum, string::GString, Env};
 
 pub const DEFINE: GString = GString::from_bytes(b"define");
+pub const LET: GString = GString::from_bytes(b"let");
 pub const LAMBDA: GString = GString::from_bytes(b"lambda");
 pub const IF: GString = GString::from_bytes(b"if");
 pub const COND: GString = GString::from_bytes(b"cond");
