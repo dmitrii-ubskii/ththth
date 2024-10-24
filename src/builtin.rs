@@ -16,6 +16,7 @@ const DISPLAY: GString = GString::from_bytes(b"display");
 const NEWLINE: GString = GString::from_bytes(b"newline");
 
 const IS_NIL: GString = GString::from_bytes(b"nil?");
+const IS_PAIR: GString = GString::from_bytes(b"pair?");
 const IS_EQ: GString = GString::from_bytes(b"eq?");
 
 const EQ: GString = GString::from_bytes(b"=");
@@ -24,6 +25,7 @@ const LE: GString = GString::from_bytes(b"<=");
 const GT: GString = GString::from_bytes(b">");
 const GE: GString = GString::from_bytes(b">=");
 
+const LENGTH: GString = GString::from_bytes(b"length");
 const CONS: GString = GString::from_bytes(b"cons");
 const CAR: GString = GString::from_bytes(b"car");
 const CDR: GString = GString::from_bytes(b"cdr");
@@ -43,11 +45,13 @@ pub fn init_builtins() -> Env<'static> {
 	env.insert(DISPLAY, Datum::Builtin(display));
 	env.insert(NEWLINE, Datum::Builtin(newline));
 
+	env.insert(LENGTH, Datum::Builtin(length));
 	env.insert(CONS, Datum::Builtin(cons));
 	env.insert(CAR, Datum::Builtin(car));
 	env.insert(CDR, Datum::Builtin(cdr));
 
 	env.insert(IS_NIL, Datum::Builtin(is_nil));
+	env.insert(IS_PAIR, Datum::Builtin(is_pair));
 	env.insert(IS_EQ, Datum::Builtin(is_eq));
 
 	env.insert(EQ, Datum::Builtin(eq));
@@ -88,6 +92,22 @@ fn newline(_env: &mut Env<'_>, args: Datum) -> Datum {
 	Datum::Void
 }
 
+pub fn length(_env: &mut Env<'_>, args: Datum) -> Datum {
+	fn list_length(list: Datum) -> Result<usize, Datum> {
+		if let Datum::Nil = list {
+			return Ok(0);
+		}
+		let Datum::List { head: _, tail } = list else { return Err(Datum::err()) };
+		Ok(1 + list_length(*tail)?)
+	}
+	let Datum::List { head: list, tail: nil } = args else { return Datum::err() };
+	let Datum::Nil = *nil else { return Datum::err() };
+	match list_length(*list) {
+		Ok(len) => Datum::Number(len as f64),
+		Err(err) => err,
+	}
+}
+
 pub fn cons(_env: &mut Env<'_>, args: Datum) -> Datum {
 	let Datum::List { head: fst, tail } = args else { return Datum::err() };
 	let Datum::List { head: snd, tail: nil } = *tail else { return Datum::err() };
@@ -116,6 +136,12 @@ pub fn is_nil(_env: &mut Env<'_>, args: Datum) -> Datum {
 		Datum::Nil => Datum::Boolean(true),
 		_ => Datum::Boolean(false),
 	}
+}
+
+pub fn is_pair(_env: &mut Env<'_>, args: Datum) -> Datum {
+	let Datum::List { head: arg, tail: nil } = args else { return Datum::err() };
+	let Datum::Nil = *nil else { return Datum::err() };
+	Datum::Boolean(matches!(*arg, Datum::List { .. }))
 }
 
 pub fn is_eq(_env: &mut Env<'_>, args: Datum) -> Datum {

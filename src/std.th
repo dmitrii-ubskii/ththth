@@ -7,15 +7,7 @@
 (define (not x)
   (if x #f #t))
 
-(define (pair? x)
-  (not (err? (cdr x))))
-
-(define (list? x)
-  (if (nil? x)
-      #t
-      (if (pair? x)
-          (list? (cdr x))
-          #f)))
+(define (list? x) (or (nil? x) (and (pair? x) (list? (cdr x)))))
 
 (define (cadr list)
   (car (cdr list)))
@@ -23,11 +15,6 @@
   (cadr (cdr list)))
 (define (cadddr list)
   (caddr (cdr list)))
-
-(define (length list)
-  (if (nil? list)
-      0
-      (+ 1 (length (cdr list)))))
 
 (define (abs x)
   (if (< x 0)
