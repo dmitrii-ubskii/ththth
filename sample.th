@@ -57,7 +57,7 @@
 
 (define (print seed)
   (when (not (nil? seed))
-    (display (car seed))
+    (display (map (lambda (x) (if (= x 0) ', 0)) (car seed)))
     (newline)
     (print (cdr seed))))
 
