@@ -7,7 +7,7 @@ use std::{
 	io::{stdin, Read},
 };
 
-use builtin::{COND, DEFINE, ELSE, IF, LAMBDA, LET, WHEN};
+use builtin::{AND, COND, DEFINE, ELSE, IF, LAMBDA, LET, OR, WHEN};
 use data::{Datum, Expression};
 use string::GString;
 
@@ -50,6 +50,8 @@ fn eval(env: &mut Env<'_>, expr: &Expression) -> Datum {
 			Expression::Datum(Datum::Symbol(DEFINE)) => define(env, args),
 			Expression::Datum(Datum::Symbol(LET)) => let_(env, args),
 			Expression::Datum(Datum::Symbol(LAMBDA)) => lambda(env, args),
+			Expression::Datum(Datum::Symbol(AND)) => and(env, args),
+			Expression::Datum(Datum::Symbol(OR)) => or(env, args),
 			Expression::Datum(Datum::Symbol(IF)) => if_then_else(env, args),
 			Expression::Datum(Datum::Symbol(WHEN)) => when(env, args),
 			Expression::Datum(Datum::Symbol(COND)) => cond(env, args),
@@ -144,6 +146,30 @@ fn if_then_else(env: &mut Env<'_>, args: &Expression) -> Datum {
 		eval(env, then_branch)
 	} else {
 		eval(env, else_branch)
+	}
+}
+
+fn and(env: &mut Env<'_>, args: &Expression) -> Datum {
+	if let Expression::Datum(Datum::Nil) = args {
+		return Datum::Boolean(true);
+	}
+	let Expression::Expression { head: first, tail: rest } = args else { return Datum::err() };
+	match eval(env, first) {
+		Datum::Boolean(true) => and(env, rest),
+		Datum::Boolean(false) => Datum::Boolean(false),
+		_ => Datum::err(),
+	}
+}
+
+fn or(env: &mut Env<'_>, args: &Expression) -> Datum {
+	if let Expression::Datum(Datum::Nil) = args {
+		return Datum::Boolean(false);
+	}
+	let Expression::Expression { head: first, tail: rest } = args else { return Datum::err() };
+	match eval(env, first) {
+		Datum::Boolean(false) => or(env, rest),
+		Datum::Boolean(true) => Datum::Boolean(true),
+		_ => Datum::err(),
 	}
 }
 

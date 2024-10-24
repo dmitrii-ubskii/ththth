@@ -7,20 +7,6 @@
 (define (not x)
   (if x #f #t))
 
-(define (and . args)
-  (if (nil? args)
-      #t
-      (if (car args)
-          (apply and (cdr args))
-          #f)))
-
-(define (or . args)
-  (if (nil? args)
-      #f
-      (if (car args)
-          #t
-          (apply or (cdr args)))))
-
 (define (pair? x)
   (not (err? (cdr x))))
 
